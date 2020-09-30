@@ -1,7 +1,7 @@
 {
   "domain": "hifiberry",
   "name": "Hifiberry",
-  "documentation": "https://www.home-assistant.io/integrations/HifiBerry",
+  "documentation": "https://github.com/willholdoway/hifiberry/blob/master/README.md",
   "requirements": [],
   "dependencies": [],
   "codeowners": ["@willholdoway"]
