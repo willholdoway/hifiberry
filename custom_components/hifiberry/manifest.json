@@ -4,6 +4,6 @@
   "documentation": "https://github.com/willholdoway/hifiberry/blob/master/README.md",
   "requirements": [],
   "dependencies": [],
-  "codeowners": ["@willholdoway"]
+  "codeowners": ["@willholdoway"],
   "issue_tracker": "https://github.com/willholdoway/hifiberry/issues"
 }
