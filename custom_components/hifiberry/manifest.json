@@ -1,7 +1,7 @@
 {
   "domain": "hifiberry",
-  "name": "Hifiberry",
-  "documentation": "https://github.com/willholdoway/hifiberry/blob/master/README.md",
+  "name": "HifiBerry",
+  "documentation": "https://github.com/willholdoway/hifiberry",
   "requirements": [],
   "dependencies": [],
   "codeowners": ["@willholdoway"],
