@@ -1,9 +1,14 @@
 {
-  "domain": "hifiberry",
-  "name": "HifiBerry",
-  "documentation": "https://github.com/willholdoway/hifiberry",
-  "requirements": [],
-  "dependencies": [],
-  "codeowners": ["@willholdoway"],
-  "issue_tracker": "https://github.com/willholdoway/hifiberry/issues"
+    "domain": "hifiberry",
+    "name": "hifiberry",
+    "config_flow": true,
+    "documentation": "https://www.home-assistant.io/integrations/hifiberry",
+    "requirements": ["pyhifiberry==0.0.2"],
+    "ssdp": [],
+    "zeroconf": [],
+    "homekit": {},
+    "dependencies": [],
+    "codeowners": ["@dgomes"],
+    "iot_class": "local_polling",
+    "version": "0.1.0"
 }
