@@ -8,6 +8,6 @@
         {"type": "_mpd._tcp.local.", "name": "music player*"}
     ],
     "dependencies": [],
-    "codeowners": ["@dgomes"],
+    "codeowners": ["@willholdoway", "@dgomes"],
     "iot_class": "local_polling"
 }
