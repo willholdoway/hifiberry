@@ -19,6 +19,7 @@ from homeassistant.const import (
     STATE_PAUSED,
     STATE_PLAYING,
 )
+from pyhifiberry.audiocontrol2 import Audiocontrol2Exception, LOGGER
 from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
 
 SUPPORT_HIFIBERRY = (
@@ -47,7 +48,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     name = f"hifiberry {config_entry.data['host']}"
 
     entity = HifiberryMediaPlayer(audiocontrol2, meta, volume, uid, name)
-    _LOGGER.debug(meta, volume)
+    _LOGGER.debug("Vetadata: %s, Volume: %s", meta, volume)
     async_add_entities([entity])
 
 
@@ -62,6 +63,12 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
         self._muted = volume == 0
         self._volume = self._muted_volume = volume
         self._metadata = metadata
+        self._available = None
+
+    @property
+    def available(self) -> bool:
+        """Return true if device is responding."""
+        return self._available
 
     @property
     def unique_id(self):
@@ -79,8 +86,13 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
 
     async def async_update(self):
         """Update state."""
-        self._metadata = await self._audiocontrol2.metadata()
-        self._volume = await self._audiocontrol2.volume()
+        try:
+            self._metadata = await self._audiocontrol2.metadata()
+            self._volume = await self._audiocontrol2.volume()
+            LOGGER.debug("Metadata: %s", self._metadata)
+            self._available = True
+        except Audiocontrol2Exception:
+            self._available = False
 
     @property
     def media_content_type(self):
@@ -98,6 +110,14 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
         return STATE_IDLE
 
     @property
+    def media_position_updated_at(self):
+        """When was the position of the current playing media valid.
+
+        Returns value from homeassistant.util.dt.utcnow().
+        """
+        return self._metadata.get("positionupdate", None)
+
+    @property
     def media_title(self):
         """Title of current playing media."""
         return self._metadata.get("title", None)
@@ -111,6 +131,16 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
     def media_album_name(self):
         """Artist of current playing media (Music track only)."""
         return self._metadata.get("albumTitle", None)
+
+    @property
+    def media_album_artist(self):
+        """Album artist of current playing media, music track only."""
+        return self._metadata.get("albumArtist", None)
+
+    @property
+    def media_track(self):
+        """Track number of current playing media, music track only."""
+        return self._metadata.get("tracknumber", None)
 
     @property
     def media_image_url(self):
