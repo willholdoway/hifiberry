@@ -7,10 +7,10 @@ To get started put the files from `/custom_components/hifiberry/` in your folder
 
 ### Configuration
 - Browse to your Home Assistant instance.
-- In the sidebar click on  Configuration.
-- From the configuration menu select:  Integrations.
+- In the sidebar click on  **Configuration**.
+- From the configuration menu select:  **Integrations**.
 - In the bottom right, click on the  Add Integration button.
-- From the list, search and select “Hifiberry”.
+- From the list, search and select “_Hifiberry_”.
 - Follow the instruction on screen to complete the set up.
 
 
