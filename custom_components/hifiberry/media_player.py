@@ -1,21 +1,8 @@
-"""
-HifiBerry Platform.
-
-HifiBerry rest API: https://github.com/hifiberry/audiocontrol2/blob/fee165140c9da044c2166cac1d77ae5e0008c351/doc/api.md
-"""
-import asyncio
-from asyncio import CancelledError
-from datetime import timedelta
+"""Hifiberry Platform."""
 import logging
-import socket
+from datetime import timedelta
 
-import aiohttp
-from aiohttp.client_exceptions import ClientError
-from aiohttp.hdrs import CONNECTION, KEEP_ALIVE
-import async_timeout
-import voluptuous as vol
-
-from homeassistant.components.media_player import PLATFORM_SCHEMA, MediaPlayerEntity
+from homeassistant.components.media_player import MediaPlayerEntity
 from homeassistant.components.media_player.const import (
     MEDIA_TYPE_MUSIC,
     SUPPORT_NEXT_TRACK,
@@ -28,26 +15,12 @@ from homeassistant.components.media_player.const import (
     SUPPORT_VOLUME_STEP,
 )
 from homeassistant.const import (
-    CONF_HOST,
-    CONF_NAME,
-    CONF_PORT,
     STATE_IDLE,
-    HTTP_OK,
     STATE_PAUSED,
     STATE_PLAYING,
 )
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import homeassistant.helpers.config_validation as cv
-
-_LOGGER = logging.getLogger(__name__)
-
-DEFAULT_NAME = "HifiBerry"
-DEFAULT_PORT = 81
-
-DATA_HIFIBERRY = "hifiberry"
-
-TIMEOUT = 10
-SCAN_INTERVAL = timedelta(seconds=2)
+from pyhifiberry.audiocontrol2 import Audiocontrol2Exception, LOGGER
+from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
 
 SUPPORT_HIFIBERRY = (
     SUPPORT_PAUSE
@@ -60,121 +33,66 @@ SUPPORT_HIFIBERRY = (
     | SUPPORT_VOLUME_STEP
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_HOST): cv.string,
-        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
-    }
-)
+_LOGGER = logging.getLogger(__name__)
+
+SCAN_INTERVAL = timedelta(seconds=2)
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the HifiBerry platform."""
-    if DATA_HIFIBERRY not in hass.data:
-        hass.data[DATA_HIFIBERRY] = dict()
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    """Set up the hifiberry media player platform."""
 
-    # This is a manual configuration?
-    if discovery_info is None:
-        name = config.get(CONF_NAME)
-        host = config.get(CONF_HOST)
-        port = config.get(CONF_PORT)
-    else:
-        name = "{} ({})".format(DEFAULT_NAME, discovery_info.get("hostname"))
-        host = discovery_info.get("host")
-        port = discovery_info.get("port")
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    audiocontrol2 = data[DATA_HIFIBERRY]
+    meta, volume = data[DATA_INIT]
+    uid = config_entry.entry_id
+    name = f"hifiberry {config_entry.data['host']}"
 
-    # Only add a device once, so discovered devices do not override manual
-    # config.
-    ip_addr = socket.gethostbyname(host)
-    if ip_addr in hass.data[DATA_HIFIBERRY]:
-        return
-
-    entity = HifiBerry(name, host, port, hass)
-
-    hass.data[DATA_HIFIBERRY][ip_addr] = entity
+    entity = HifiberryMediaPlayer(audiocontrol2, meta, volume, uid, name)
+    _LOGGER.debug("Vetadata: %s, Volume: %s", meta, volume)
     async_add_entities([entity])
 
 
-class HifiBerry(MediaPlayerEntity):
-    """HifiBerry Player Object."""
+class HifiberryMediaPlayer(MediaPlayerEntity):
+    """Hifiberry Media Player Object."""
 
-    def __init__(self, name, host, port, hass):
+    def __init__(self, audiocontrol2, metadata, volume, uid, name):
         """Initialize the media player."""
-        self.host = host
-        self.port = port
-        self.hass = hass
-        self._url = "{}:{}".format(host, str(port))
+        self._audiocontrol2 = audiocontrol2
+        self._uid = uid
         self._name = name
-        self._muted = False
-        self._state = {}
-        self._volume = {}
-        self._muted_volume = self.volume_level
+        self._muted = volume == 0
+        self._volume = self._muted_volume = volume
+        self._metadata = metadata
+        self._available = None
 
-    async def get_hifiberry_msg(self, method, params=None):
-        """Send message."""
-        url = f"http://{self.host}:{self.port}/{method}"
-        _LOGGER.debug("URL: %s params: %s", url, params)
-        
-        try:
-            websession = async_get_clientsession(self.hass)
-            response = await websession.get(url)
-            if response.status == HTTP_OK:
-                data = await response.json(content_type=None)
-            else:
-                _LOGGER.error(
-                    "Get failed, response code: %s Full message: %s",
-                    response.status,
-                    response,
-                )
-                return False
+    @property
+    def available(self) -> bool:
+        """Return true if device is responding."""
+        return self._available
 
-        except (asyncio.TimeoutError, aiohttp.ClientError) as error:
-            _LOGGER.error(
-                "Failed communicating with HifiBerry '%s': %s", self._name, type(error)
-            )
-            return False
-        return data
+    @property
+    def unique_id(self):
+        """Return the unique id for the entity."""
+        return self._uid
 
-    async def post_hifiberry_msg(self, method, params=None):
-        """Send message."""
-        url = f"http://{self.host}:{self.port}/{method}"
-        _LOGGER.debug("URL: %s params: %s", url, params)
-        
-        try:
-            websession = async_get_clientsession(self.hass)
-            response = await websession.post(url, json=params)
-            if response.status == HTTP_OK:
-                data = await response.json()
-            else:
-                _LOGGER.error(
-                    "Post failed, response code: %s Full message: %s",
-                    response.status,
-                    response,
-                )
-                return False
-
-        except (asyncio.TimeoutError, aiohttp.ClientError) as error:
-            _LOGGER.error(
-                "Failed communicating with HifiBerry '%s': %s", self._name, type(error)
-            )
-            return False
-        return data
-
-    async def async_update_volume(self):
-        """Update volume level."""
-        resp = await self.get_hifiberry_msg("api/volume", None)
-        if resp is False:
-            return
-        self._volume = resp.copy()
+    @property
+    def device_info(self):
+        """Return device info for this device."""
+        return {
+            "identifiers": {(DOMAIN, self.unique_id)},
+            "name": self.name,
+            "manufacturer": "Hifiberry",
+        }
 
     async def async_update(self):
         """Update state."""
-        resp = await self.get_hifiberry_msg("api/track/metadata", None)
-        await self.async_update_volume()
-        if resp is False:
-            return
-        self._state = resp.copy()
+        try:
+            self._metadata = await self._audiocontrol2.metadata()
+            self._volume = await self._audiocontrol2.volume()
+            LOGGER.debug("Metadata: %s", self._metadata)
+            self._available = True
+        except Audiocontrol2Exception:
+            self._available = False
 
     @property
     def media_content_type(self):
@@ -184,7 +102,7 @@ class HifiBerry(MediaPlayerEntity):
     @property
     def state(self):
         """Return the state of the device."""
-        status = self._state.get("playerState", None)
+        status = self._metadata.get("playerState", None)
         if status == "paused":
             return STATE_PAUSED
         if status == "playing":
@@ -192,40 +110,55 @@ class HifiBerry(MediaPlayerEntity):
         return STATE_IDLE
 
     @property
+    def media_position_updated_at(self):
+        """When was the position of the current playing media valid.
+
+        Returns value from homeassistant.util.dt.utcnow().
+        """
+        return self._metadata.get("positionupdate", None)
+
+    @property
     def media_title(self):
         """Title of current playing media."""
-        return self._state.get("title", None)
+        return self._metadata.get("title", None)
 
     @property
     def media_artist(self):
         """Artist of current playing media (Music track only)."""
-        return self._state.get("artist", None)
+        return self._metadata.get("artist", None)
 
     @property
     def media_album_name(self):
         """Artist of current playing media (Music track only)."""
-        return self._state.get("albumTitle", None)
+        return self._metadata.get("albumTitle", None)
+
+    @property
+    def media_album_artist(self):
+        """Album artist of current playing media, music track only."""
+        return self._metadata.get("albumArtist", None)
+
+    @property
+    def media_track(self):
+        """Track number of current playing media, music track only."""
+        return self._metadata.get("tracknumber", None)
 
     @property
     def media_image_url(self):
-            """Image url of current playing media."""
-            artUrl = self._state.get("artUrl", None)
-            externalArtUrl = self._state.get("externalArtUrl", None)
-            if artUrl is not None:
-                if artUrl.startswith("static/"):
-                    return externalArtUrl
-                if artUrl.startswith("artwork/"):
-                    return f"http://{self.host}:{self.port}/{artUrl}"
-                return artUrl
-            return externalArtUrl
+        """Image url of current playing media."""
+        art_url = self._metadata.get("artUrl", None)
+        external_art_url = self._metadata.get("externalArtUrl", None)
+        if art_url is not None:
+            if art_url.startswith("static/"):
+                return external_art_url
+            if art_url.startswith("artwork/"):
+                return f"{self._audiocontrol2.base_url}/{art_url}"
+            return art_url
+        return external_art_url
 
     @property
     def volume_level(self):
         """Volume level of the media player (0..1)."""
-        volume = self._volume.get("percent")
-        if volume is not None:
-            volume = int(volume) / 100
-        return volume
+        return int(self._volume) / 100
 
     @property
     def is_volume_muted(self):
@@ -240,7 +173,7 @@ class HifiBerry(MediaPlayerEntity):
     @property
     def source(self):
         """Name of the current input source."""
-        return self._state.get("playerName")
+        return self._metadata.get("playerName")
 
     @property
     def supported_features(self):
@@ -249,27 +182,29 @@ class HifiBerry(MediaPlayerEntity):
 
     async def async_media_next_track(self):
         """Send media_next command to media player."""
-        await self.post_hifiberry_msg("api/player/next", None)
+        await self._audiocontrol2.player("next")
 
     async def async_media_previous_track(self):
         """Send media_previous command to media player."""
-        await self.post_hifiberry_msg("api/player/previous", None)
+        await self._audiocontrol2.player("previous")
 
     async def async_media_play(self):
         """Send media_play command to media player."""
-        await self.post_hifiberry_msg("api/player/play")
+        await self._audiocontrol2.player("play")
 
     async def async_media_pause(self):
         """Send media_pause command to media player."""
-        await self.post_hifiberry_msg("api/player/pause")
+        await self._audiocontrol2.player("pause")
 
     async def async_volume_up(self):
         """Service to send the hifiberry the command for volume up."""
-        await self.post_hifiberry_msg("api/volume", params={"percent": "+5"})
+        await self._audiocontrol2.volume("+5")
+        self._volume += 5
 
     async def async_volume_down(self):
         """Service to send the hifiberry the command for volume down."""
-        await self.post_hifiberry_msg("api/volume", params={"percent": "-5"})
+        await self._audiocontrol2.volume("-5")
+        self._volume -= 5
 
     async def async_set_volume_level(self, volume):
         """Send volume_set command to media player."""
@@ -277,14 +212,13 @@ class HifiBerry(MediaPlayerEntity):
             volume = 0
         elif volume > 1:
             volume = 1
-        await self.post_hifiberry_msg(
-            "api/volume", params={"percent": str(int((volume) * 100))}
-        )
+        await self._audiocontrol2.volume(int(volume * 100))
+        self._volume = volume * 100
 
     async def async_mute_volume(self, mute):
         """Mute. Emulated with set_volume_level."""
         if mute:
             self._muted_volume = self.volume_level
-            await self.post_hifiberry_msg("api/volume", params={"percent": str(int((0) * 100))})
-        await self.post_hifiberry_msg("api/volume", params={"percent": str(int((self._muted_volume) * 100))})
+            await self._audiocontrol2.volume(0)
+        await self._audiocontrol2.volume(int(self._muted_volume * 100))
         self._muted = mute
