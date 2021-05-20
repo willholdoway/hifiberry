@@ -6,22 +6,13 @@ You can use HACS or install the component manually:
 To get started put the files from `/custom_components/hifiberry/` in your folder `<config directory>/custom_components/hifiberry/`
 
 ### Configuration
-#### Example configuration.yaml
+- Browse to your Home Assistant instance.
+- In the sidebar click on  Configuration.
+- From the configuration menu select:  Integrations.
+- In the bottom right, click on the  Add Integration button.
+- From the list, search and select “Hifiberry”.
+- Follow the instruction on screen to complete the set up.
 
-```yaml
-media_player:
-  - platform: hifiberry
-    host: 192.168.1.100
-```
-
-### Configuration variables
-
-key | required | value | description  
-:--- | :--- | :--- | :---
-**platform** | yes | `hifiberry` | The platform name `hifiberry`.
-**host** | yes | `192.168.1.101` | The IP address or hostname of the hifiberry device.
-**port** | no | `81` | The Port number of HifiBerry audciocontrol2 rest service. By default, '81'.
-**name** | no | `HifiBerry` | The name the media player will have in Home Assistant, default is `HifiBerry`.
 
 ### Installation instructions Hifiberry
 None required other than setting a fixed IP for the device.
