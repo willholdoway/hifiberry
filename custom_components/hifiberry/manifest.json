@@ -1,8 +1,8 @@
 {
     "domain": "hifiberry",
-    "name": "hifiberry",
+    "name": "HiFiBerry",
     "config_flow": true,
-    "documentation": "https://www.home-assistant.io/integrations/hifiberry",
+    "documentation": "https://github.com/willholdoway/hifiberry",
     "requirements": ["pyhifiberry==0.0.2"],
     "zeroconf": [
         {"type": "_mpd._tcp.local.", "name": "music player*"}

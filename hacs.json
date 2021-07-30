@@ -1,5 +1,5 @@
 {
-  "name": "Hifiberry",
+  "name": "HiFiBerry",
   "domains": ["media_player"],
   "iot_class": "Local Polling",
   "render_readme": "true"
