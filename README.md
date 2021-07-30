@@ -10,18 +10,18 @@ This is an end-to-end streaming lightweight OS built by HiFiBerry for their Amp+
 
 ### Installation
 
-You can use [HACS](https://hacs.xyz/) or install the component manually:
+It is recommended this is installed using [Home Assistant Community Store (HACS)](https://hacs.xyz/) to ensure your Home Assistant instance can easily be kept up-to-date with the latest changes.
 
-To get started put the files from `/custom_components/hifiberry/` in your folder `<config directory>/custom_components/hifiberry/`
+However, to install this manually, copy everything from `/custom_components/hifiberry/` to your folder `<config directory>/custom_components/hifiberry/`.
 
 ### Configuration
 
-- Browse to your Home Assistant instance.
-- In the sidebar click on  **Configuration**.
-- From the configuration menu select:  **Integrations**.
-- In the bottom right, click on the  Add Integration button.
-- From the list, search and select “_Hifiberry_”.
-- Follow the instruction on screen to complete the set up.
+- Browse to your Home Assistant instance
+- In the sidebar click on  **Configuration**
+- From the configuration menu select: **Integrations**
+- In the bottom right, click on the **Add Integration** button
+- From the list, search and select “_HiFiBerry_”
+- Follow the instruction to complete the set up
 
 ### Installation
 
