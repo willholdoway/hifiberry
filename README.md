@@ -2,7 +2,7 @@
 
 ![beta_badge](https://img.shields.io/badge/maturity-Beta-yellow.png)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
-[![License: CC0-1.0](https://licensebuttons.net/l/zero/1.0/80x15.png)](http://creativecommons.org/publicdomain/zero/1.0/)
+[![License: CC0-1.0](https://img.shields.io/badge/License-CC0%201.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
 
 The HiFiBerry HA integration allows controlling [HifiBerry OS](https://www.hifiberry.com/hifiberryos/) media players from Home Assistant.
 
