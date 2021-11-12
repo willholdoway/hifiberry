@@ -3,7 +3,7 @@
     "name": "HiFiBerry",
     "config_flow": true,
     "documentation": "https://github.com/willholdoway/hifiberry",
-    "requirements": ["pyhifiberry==0.0.2"],
+    "requirements": ["pyhifiberry==0.0.3"],
     "zeroconf": [
         {"type": "_mpd._tcp.local.", "name": "music player*"}
     ],
