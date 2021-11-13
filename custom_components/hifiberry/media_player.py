@@ -13,6 +13,7 @@ from homeassistant.components.media_player.const import (
     SUPPORT_VOLUME_MUTE,
     SUPPORT_VOLUME_SET,
     SUPPORT_VOLUME_STEP,
+    SUPPORT_TURN_OFF,
 )
 from homeassistant.const import (
     STATE_IDLE,
@@ -31,6 +32,7 @@ SUPPORT_HIFIBERRY = (
     | SUPPORT_STOP
     | SUPPORT_PLAY
     | SUPPORT_VOLUME_STEP
+    | SUPPORT_TURN_OFF
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -222,3 +224,6 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
             await self._audiocontrol2.volume(0)
         await self._audiocontrol2.volume(int(self._muted_volume * 100))
         self._muted = mute
+
+    async def async_turn_off(self):
+        return await self._audiocontrol2.poweroff()
