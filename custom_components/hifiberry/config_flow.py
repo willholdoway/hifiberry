@@ -5,16 +5,12 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
-from pyhifiberry.audiocontrol2 import Audiocontrol2, Audiocontrol2Exception
-
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant import config_entries
+from homeassistant import config_entries, data_entry_flow
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.typing import DiscoveryInfoType
-from homeassistant import data_entry_flow
+from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
+from socketio.exceptions import ConnectionError
 
 from .const import DOMAIN
 
@@ -23,17 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-
-    api = Audiocontrol2(
-        async_get_clientsession(hass), host=data["host"], port=data["port"]
-    )
-
-    try:
-        await api.metadata()
-    except Audiocontrol2Exception as err:
-        raise CannotConnect from err
-    except Exception as err:
-        raise Exception from err
+    
+    await Audiocontrol2SIO.connect(host=data["host"], port=data["port"])
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -58,10 +45,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_zeroconf(self, discovery_info: DiscoveryInfoType) -> data_entry_flow.FlowResult:
         """Zeroconf detects hifiberry, but we don't have enough informatio to create entry."""
-        await self.async_set_unique_id(discovery_info['host'])
+        await self.async_set_unique_id(discovery_info.host)
         self._abort_if_unique_id_configured()
 
-        self.host = discovery_info['host']
+        self.host = discovery_info.host
         return await self.async_step_user()
 
     async def async_step_user(
@@ -80,7 +67,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             await validate_input(self.hass, user_input)
-        except CannotConnect:
+        except ConnectionError:
             errors["base"] = "cannot_connect"
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception")
@@ -91,7 +78,3 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user", data_schema=self.schema, errors=errors
         )
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""

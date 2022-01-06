@@ -1,5 +1,6 @@
 """Hifiberry Platform."""
 import logging
+
 from datetime import timedelta
 
 from homeassistant.components.media_player import MediaPlayerEntity
@@ -20,7 +21,9 @@ from homeassistant.const import (
     STATE_PAUSED,
     STATE_PLAYING,
 )
-from pyhifiberry.audiocontrol2 import Audiocontrol2Exception, LOGGER
+from pyhifiberry.audiocontrol2 import Audiocontrol2, Audiocontrol2Exception
+from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
+
 from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
 
 SUPPORT_HIFIBERRY = (
@@ -37,40 +40,36 @@ SUPPORT_HIFIBERRY = (
 
 _LOGGER = logging.getLogger(__name__)
 
-SCAN_INTERVAL = timedelta(seconds=2)
-
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the hifiberry media player platform."""
 
     data = hass.data[DOMAIN][config_entry.entry_id]
     audiocontrol2 = data[DATA_HIFIBERRY]
-    meta, volume = data[DATA_INIT]
     uid = config_entry.entry_id
     name = f"hifiberry {config_entry.data['host']}"
 
-    entity = HifiberryMediaPlayer(audiocontrol2, meta, volume, uid, name)
-    _LOGGER.debug("Vetadata: %s, Volume: %s", meta, volume)
+    entity = HifiberryMediaPlayer(audiocontrol2, uid, name)
     async_add_entities([entity])
 
 
 class HifiberryMediaPlayer(MediaPlayerEntity):
     """Hifiberry Media Player Object."""
 
-    def __init__(self, audiocontrol2, metadata, volume, uid, name):
+    should_poll = False
+
+    def __init__(self, audiocontrol2: Audiocontrol2SIO, uid, name):
         """Initialize the media player."""
         self._audiocontrol2 = audiocontrol2
         self._uid = uid
         self._name = name
-        self._muted = volume == 0
-        self._volume = self._muted_volume = volume
-        self._metadata = metadata
-        self._available = None
+        self._muted = audiocontrol2.volume.percent == 0
+        self._muted_volume = audiocontrol2.volume.percent
 
     @property
     def available(self) -> bool:
         """Return true if device is responding."""
-        return self._available
+        return self._audiocontrol2.connected
 
     @property
     def unique_id(self):
@@ -86,15 +85,15 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
             "manufacturer": "Hifiberry",
         }
 
-    async def async_update(self):
-        """Update state."""
-        try:
-            self._metadata = await self._audiocontrol2.metadata()
-            self._volume = await self._audiocontrol2.volume()
-            LOGGER.debug("Metadata: %s", self._metadata)
-            self._available = True
-        except Audiocontrol2Exception:
-            self._available = False
+    async def async_added_to_hass(self) -> None:
+        """Run when this Entity has been added to HA."""
+        await self._audiocontrol2.volume.get()      ### make sure volume percent is set
+        self._audiocontrol2.metadata.add_callback(self.schedule_update_ha_state)
+        self._audiocontrol2.volume.add_callback(self.schedule_update_ha_state)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Entity being removed from hass."""
+        await self._audiocontrol2.disconnect()
 
     @property
     def media_content_type(self):
@@ -104,7 +103,7 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
     @property
     def state(self):
         """Return the state of the device."""
-        status = self._metadata.get("playerState", None)
+        status = self._audiocontrol2.metadata.playerState
         if status == "paused":
             return STATE_PAUSED
         if status == "playing":
@@ -117,38 +116,38 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
 
         Returns value from homeassistant.util.dt.utcnow().
         """
-        return self._metadata.get("positionupdate", None)
-
+        return self._audiocontrol2.metadata.positionupdate
+        
     @property
     def media_title(self):
         """Title of current playing media."""
-        return self._metadata.get("title", None)
+        return self._audiocontrol2.metadata.title
 
     @property
     def media_artist(self):
         """Artist of current playing media (Music track only)."""
-        return self._metadata.get("artist", None)
+        return self._audiocontrol2.metadata.artist
 
     @property
     def media_album_name(self):
         """Artist of current playing media (Music track only)."""
-        return self._metadata.get("albumTitle", None)
+        return self._audiocontrol2.metadata.albumTitle
 
     @property
     def media_album_artist(self):
         """Album artist of current playing media, music track only."""
-        return self._metadata.get("albumArtist", None)
+        return self._audiocontrol2.metadata.albumArtist
 
     @property
     def media_track(self):
         """Track number of current playing media, music track only."""
-        return self._metadata.get("tracknumber", None)
+        return self._audiocontrol2.metadata.tracknumber
 
     @property
     def media_image_url(self):
         """Image url of current playing media."""
-        art_url = self._metadata.get("artUrl", None)
-        external_art_url = self._metadata.get("externalArtUrl", None)
+        art_url = self._audiocontrol2.metadata.artUrl
+        external_art_url = self._audiocontrol2.metadata.externalArtUrl
         if art_url is not None:
             if art_url.startswith("static/"):
                 return external_art_url
@@ -160,7 +159,7 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
     @property
     def volume_level(self):
         """Volume level of the media player (0..1)."""
-        return int(self._volume) / 100
+        return int(self._audiocontrol2.volume.percent) / 100
 
     @property
     def is_volume_muted(self):
@@ -175,7 +174,7 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
     @property
     def source(self):
         """Name of the current input source."""
-        return self._metadata.get("playerName")
+        return self._audiocontrol2.metadata.playerName
 
     @property
     def supported_features(self):
@@ -184,29 +183,27 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
 
     async def async_media_next_track(self):
         """Send media_next command to media player."""
-        await self._audiocontrol2.player("next")
+        await self._audiocontrol2.player.next()
 
     async def async_media_previous_track(self):
         """Send media_previous command to media player."""
-        await self._audiocontrol2.player("previous")
+        await self._audiocontrol2.player.previous()
 
     async def async_media_play(self):
         """Send media_play command to media player."""
-        await self._audiocontrol2.player("play")
+        await self._audiocontrol2.player.play()
 
     async def async_media_pause(self):
         """Send media_pause command to media player."""
-        await self._audiocontrol2.player("pause")
+        await self._audiocontrol2.player.pause()
 
     async def async_volume_up(self):
         """Service to send the hifiberry the command for volume up."""
-        await self._audiocontrol2.volume("+5")
-        self._volume += 5
+        await self._audiocontrol2.volume.set(min(100, self._audiocontrol2.volume.percent + 5))
 
     async def async_volume_down(self):
         """Service to send the hifiberry the command for volume down."""
-        await self._audiocontrol2.volume("-5")
-        self._volume -= 5
+        await self._audiocontrol2.volume.set(max(0, self._audiocontrol2.volume.percent - 5))
 
     async def async_set_volume_level(self, volume):
         """Send volume_set command to media player."""
@@ -214,15 +211,15 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
             volume = 0
         elif volume > 1:
             volume = 1
-        await self._audiocontrol2.volume(int(volume * 100))
+        await self._audiocontrol2.volume.set(int(volume * 100))
         self._volume = volume * 100
 
     async def async_mute_volume(self, mute):
         """Mute. Emulated with set_volume_level."""
         if mute:
-            self._muted_volume = self.volume_level
-            await self._audiocontrol2.volume(0)
-        await self._audiocontrol2.volume(int(self._muted_volume * 100))
+            self._muted_volume = self.volume_level * 100
+            await self._audiocontrol2.volume.set(0)
+        await self._audiocontrol2.volume.set(int(self._muted_volume))
         self._muted = mute
 
     async def async_turn_off(self):
