@@ -58,10 +58,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_zeroconf(self, discovery_info: DiscoveryInfoType) -> data_entry_flow.FlowResult:
         """Zeroconf detects hifiberry, but we don't have enough informatio to create entry."""
-        await self.async_set_unique_id(discovery_info['host'])
+        await self.async_set_unique_id(discovery_info.host)
         self._abort_if_unique_id_configured()
 
-        self.host = discovery_info['host']
+        self.host = discovery_info.host
         return await self.async_step_user()
 
     async def async_step_user(
