@@ -19,7 +19,7 @@ from homeassistant.components.media_player.const import (
 from homeassistant.const import (
     STATE_IDLE,
     STATE_PAUSED,
-    STATE_PLAYING
+    STATE_PLAYING,
 )
 from .pyhifiberry_sio.audiocontrol2 import Audiocontrol2, Audiocontrol2Exception
 from .pyhifiberry_sio.audiocontrol2sio import Audiocontrol2SIO
