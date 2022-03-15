@@ -19,10 +19,10 @@ from homeassistant.components.media_player.const import (
 from homeassistant.const import (
     STATE_IDLE,
     STATE_PAUSED,
-    STATE_PLAYING,
+    STATE_PLAYING
 )
-from pyhifiberry.audiocontrol2 import Audiocontrol2, Audiocontrol2Exception
-from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
+from .pyhifiberry_sio.audiocontrol2 import Audiocontrol2, Audiocontrol2Exception
+from .pyhifiberry_sio.audiocontrol2sio import Audiocontrol2SIO
 
 from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
 
@@ -48,8 +48,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     audiocontrol2 = data[DATA_HIFIBERRY]
     uid = config_entry.entry_id
     name = f"hifiberry {config_entry.data['host']}"
-
-    entity = HifiberryMediaPlayer(audiocontrol2, uid, name)
+    base_url = f"http://{config_entry.data['host']}:{config_entry.data['port']}"
+    entity = HifiberryMediaPlayer(audiocontrol2, uid, name, base_url)
     async_add_entities([entity])
 
 
@@ -58,11 +58,12 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
 
     should_poll = False
 
-    def __init__(self, audiocontrol2: Audiocontrol2SIO, uid, name):
+    def __init__(self, audiocontrol2: Audiocontrol2SIO, uid, name, base_url):
         """Initialize the media player."""
         self._audiocontrol2 = audiocontrol2
         self._uid = uid
         self._name = name
+        self._base_url = base_url
         self._muted = audiocontrol2.volume.percent == 0
         self._muted_volume = audiocontrol2.volume.percent
 
@@ -152,7 +153,7 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
             if art_url.startswith("static/"):
                 return external_art_url
             if art_url.startswith("artwork/"):
-                return f"{self._audiocontrol2.base_url}/{art_url}"
+                return f"{self._base_url}/{art_url}"
             return art_url
         return external_art_url
 
