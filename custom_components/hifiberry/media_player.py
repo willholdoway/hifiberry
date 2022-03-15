@@ -21,7 +21,7 @@ from homeassistant.const import (
     STATE_PAUSED,
     STATE_PLAYING,
 )
-from pyhifiberry.audiocontrol2 import Audiocontrol2, Audiocontrol2Exception
+from pyhifiberry.audiocontrol2 import Audiocontrol2Exception, LOGGER
 from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
 
 from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
