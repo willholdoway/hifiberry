@@ -1,6 +1,5 @@
 """Hifiberry Platform."""
 import logging
-
 from datetime import timedelta
 
 from homeassistant.components.media_player import MediaPlayerEntity
@@ -23,7 +22,6 @@ from homeassistant.const import (
 )
 from pyhifiberry.audiocontrol2 import Audiocontrol2Exception, LOGGER
 from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
-
 from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
 
 SUPPORT_HIFIBERRY = (
