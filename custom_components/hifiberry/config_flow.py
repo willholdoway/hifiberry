@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.typing import DiscoveryInfoType
 from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
-from socketio.exceptions import ConnectionError
+from pyhifiberry.socketio_v5.exceptions import ConnectionError
 
 from .const import DOMAIN
 
