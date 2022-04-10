@@ -6,7 +6,15 @@
 
 The HiFiBerry HA integration allows controlling [HifiBerry OS](https://www.hifiberry.com/hifiberryos/) media players from Home Assistant.
 
-This is an end-to-end streaming lightweight OS built by HiFiBerry for their Amp+, DAC+ or Digi+ HAT Raspberry Pi boards compatible with AirPlay, Bluetooth, DLNA, LMS/Squeezebox, MPD, Snapcast, Spotify and Roon music services. This uses the [HiFiBerry audiocontrol2 REST API](https://github.com/hifiberry/audiocontrol2/blob/master/doc/api.md).
+This is an end-to-end streaming lightweight OS built by HiFiBerry for their Amp+, DAC+ or Digi+ HAT Raspberry Pi boards compatible with AirPlay, Bluetooth, DLNA, LMS/Squeezebox, MPD, Snapcast, Spotify and Roon music services. This uses the [HiFiBerry audiocontrol2 socketio API](https://github.com/hifiberry/audiocontrol2/blob/master/doc/socketio_api.md).
+ 
+***Be aware that this API is disabled by default. In order to use this integration it has to be enabled in the /etc/audiocontrol2.conf on the device:***
+```bash
+[webserver]
+enable=yes
+port=81
+socketio_enabled=True
+```
 
 ### Installation
 
@@ -36,4 +44,4 @@ If you have any proposed changes or bug fixes, please code them and create pull 
 ### See Also
 
 * [Home Assistant HiFiBerry discussion thread](https://community.home-assistant.io/t/hifiberry-os-media-player-integration/163567)
-* [pyhifiberry](https://github.com/dgomes/pyhifiberry)
+* [pyhifiberry](https://github.com/schnabel/pyhifiberry)
