@@ -24,16 +24,17 @@ from pyhifiberry.audiocontrol2 import Audiocontrol2Exception, LOGGER
 from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
 from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
 
+from homeassistant.components.media_player import MediaPlayerEntityFeature
 SUPPORT_HIFIBERRY = (
-    SUPPORT_PAUSE
-    | SUPPORT_VOLUME_SET
-    | SUPPORT_VOLUME_MUTE
-    | SUPPORT_PREVIOUS_TRACK
-    | SUPPORT_NEXT_TRACK
-    | SUPPORT_STOP
-    | SUPPORT_PLAY
-    | SUPPORT_VOLUME_STEP
-    | SUPPORT_TURN_OFF
+    MediaPlayerEntityFeature.PAUSE |
+    MediaPlayerEntityFeature.VOLUME_SET |
+    MediaPlayerEntityFeature.VOLUME_MUTE |
+    MediaPlayerEntityFeature.PREVIOUS_TRACK |
+    MediaPlayerEntityFeature.NEXT_TRACK |
+    MediaPlayerEntityFeature.STOP |
+    MediaPlayerEntityFeature.PLAY |
+    MediaPlayerEntityFeature.VOLUME_STEP |
+    MediaPlayerEntityFeature.TURN_OFF
 )
 
 _LOGGER = logging.getLogger(__name__)

@@ -14,7 +14,7 @@ This is an end-to-end streaming lightweight OS built by HiFiBerry for their Amp+
 enable=yes
 port=81
 socketio_enabled=True
-authtoken=my_super_secret_auth_token
+authtoken=[insert_custom_token_here]
 ```
 
 ### Installation
