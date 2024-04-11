@@ -8,7 +8,7 @@ The HiFiBerry HA integration allows controlling [HifiBerry OS](https://www.hifib
 
 This is an end-to-end streaming lightweight OS built by HiFiBerry for their Amp+, DAC+ or Digi+ HAT Raspberry Pi boards compatible with AirPlay, Bluetooth, DLNA, LMS/Squeezebox, MPD, Snapcast, Spotify and Roon music services. This uses the [HiFiBerry audiocontrol2 socketio API](https://github.com/hifiberry/audiocontrol2/blob/master/doc/socketio_api.md).
  
-***Be aware that this API is disabled by default. In order to use this integration it has to be enabled in the /etc/audiocontrol2.conf on the device:***
+***Be aware that this API is disabled by default. In order to use this integration it has to be enabled in the /etc/audiocontrol2.conf on the device, an authtoken will also have to be added:***
 ```bash
 [webserver]
 enable=yes
