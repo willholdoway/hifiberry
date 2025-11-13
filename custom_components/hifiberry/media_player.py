@@ -3,18 +3,9 @@ import logging
 from datetime import timedelta
 
 from homeassistant.components.media_player import MediaPlayerEntity
-from homeassistant.components.media_player.const import (
-    MEDIA_TYPE_MUSIC,
-    SUPPORT_NEXT_TRACK,
-    SUPPORT_PAUSE,
-    SUPPORT_PLAY,
-    SUPPORT_PREVIOUS_TRACK,
-    SUPPORT_STOP,
-    SUPPORT_VOLUME_MUTE,
-    SUPPORT_VOLUME_SET,
-    SUPPORT_VOLUME_STEP,
-    SUPPORT_TURN_OFF,
-)
+from homeassistant.components.media_player.const import MediaType
+from homeassistant.components.media_player import MediaPlayerEntityFeature
+
 from homeassistant.const import (
     STATE_IDLE,
     STATE_PAUSED,
@@ -98,7 +89,7 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
     @property
     def media_content_type(self):
         """Content type of current playing media."""
-        return MEDIA_TYPE_MUSIC
+        return MediaType.MUSIC
 
     @property
     def state(self):
