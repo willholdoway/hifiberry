@@ -8,10 +8,10 @@ import voluptuous as vol
 from homeassistant import config_entries, data_entry_flow
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import DiscoveryInfoType
-from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
-from pyhifiberry.socketio_v5.exceptions import ConnectionError
 
+from .audiocontrol import AudioControlClient, AudioControlError
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,8 +19,14 @@ _LOGGER = logging.getLogger(__name__)
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    
-    await Audiocontrol2SIO.connect(host=data["host"], port=data["port"])
+
+    client = AudioControlClient(
+        async_get_clientsession(hass),
+        data["host"],
+        data["port"],
+    )
+    await client.async_validate()
+    return {"title": data["host"]}
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -38,8 +44,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return vol.Schema(
             {
                 vol.Required("host", default=self.host): str,
-                vol.Optional("port", default=81): int,
-                vol.Optional("authtoken", default=""): str,
+                vol.Optional("port", default=80): int,
             }
         )
 
@@ -62,18 +67,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         errors = {}
 
-        await self.async_set_unique_id(user_input['host'])  # This should be future "rpi serial" from https://github.com/hifiberry/audiocontrol2/pull/17
+        await self.async_set_unique_id(user_input["host"])
         self._abort_if_unique_id_configured()
 
         try:
-            await validate_input(self.hass, user_input)
-        except ConnectionError:
+            info = await validate_input(self.hass, user_input)
+        except AudioControlError:
             errors["base"] = "cannot_connect"
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
-            return self.async_create_entry(title=user_input["host"], data=user_input)
+            return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(
             step_id="user", data_schema=self.schema, errors=errors
