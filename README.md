@@ -4,45 +4,139 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
 [![License: CC0-1.0](https://img.shields.io/badge/License-CC0%201.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
 
-The HiFiBerry HA integration allows controlling [HifiBerry OS](https://www.hifiberry.com/hifiberryos/) media players from Home Assistant.
+The HiFiBerry integration exposes a HiFiBerry OS player as a Home Assistant
+`media_player` entity.
 
-This is an end-to-end streaming lightweight OS built by HiFiBerry for their Amp+, DAC+ or Digi+ HAT Raspberry Pi boards compatible with AirPlay, Bluetooth, DLNA, LMS/Squeezebox, MPD, Snapcast, Spotify and Roon music services. This uses the [HiFiBerry audiocontrol2 socketio API](https://github.com/hifiberry/audiocontrol2/blob/master/doc/socketio_api.md).
- 
-***Be aware that this API is disabled by default. In order to use this integration it has to be enabled in the /etc/audiocontrol2.conf on the device, an authtoken will also have to be added:***
-```bash
-[webserver]
-enable=yes
-port=81
-socketio_enabled=True
-authtoken=[insert_custom_token_here]
+This version targets current HiFiBerry OS / HBOS NG builds that expose the
+AudioControl REST API through the web UI reverse proxy:
+
+```text
+http://<device>/api/audiocontrol/
 ```
 
-### Installation
+It no longer depends on the older `pyhifiberry` socket.io client.
 
-It is recommended this is installed using [Home Assistant Community Store (HACS)](https://hacs.xyz/) to ensure your Home Assistant instance can easily be kept up-to-date with the latest changes.
+## Supported Features
 
-However, to install this manually, copy everything from `/custom_components/hifiberry/` to your folder `<config directory>/custom_components/hifiberry/`.
+- Playback state, source, title, artist, album, and volume polling.
+- Play, pause, stop, and play/pause actions.
+- Dynamic control capabilities based on the active HiFiBerry player.
+- Spotify Connect, AirPlay/Shairport, MPD, Bluetooth, LMS, RAAT, and other
+  players as reported by HiFiBerry OS.
+- Album artwork lookup through the same cover-art API used by the HBOS NG web
+  UI.
 
-### Configuration
+Capabilities are source-specific. For example, AirPlay/Shairport usually reports
+play, pause, and stop, but not next/previous. Spotify and MPD may expose a wider
+set of controls.
 
-- Browse to your Home Assistant instance
-- In the sidebar click on  **Configuration**
-- From the configuration menu select: **Integrations**
-- In the bottom right, click on the **Add Integration** button
-- From the list, search and select “_HiFiBerry_”
-- Follow the instruction to complete the set up
+## Installation
 
-### Installation
+Install using [Home Assistant Community Store (HACS)](https://hacs.xyz/) where
+available.
 
-None required other than setting a fixed IP for the device running HiFiBerry.
+For manual installation, copy this folder:
 
-### Support
+```text
+custom_components/hifiberry/
+```
 
-There is no official support for this add-on and is community supported within the **[Home Assistant HiFiBerry discussion thread](https://community.home-assistant.io/t/hifiberry-os-media-player-integration/163567)**.
+to:
 
-If you have any proposed changes or bug fixes, please code them and create pull requests for your patches.
+```text
+<config directory>/custom_components/hifiberry/
+```
 
-### See Also
+Then fully restart Home Assistant.
 
-* [Home Assistant HiFiBerry discussion thread](https://community.home-assistant.io/t/hifiberry-os-media-player-integration/163567)
-* [pyhifiberry](https://github.com/schnabel/pyhifiberry)
+## Configuration
+
+1. Open Home Assistant.
+2. Go to **Settings** > **Devices & services**.
+3. Click **Add Integration**.
+4. Search for **HiFiBerry**.
+5. Enter the HiFiBerry host or IP address.
+6. Use port `80` for HBOS NG unless you have a custom reverse proxy.
+
+The old socket.io API token is no longer required.
+
+## Migration Notes
+
+This release moves the integration from the legacy HiFiBerry OS
+`audiocontrol2` socket.io API to the HBOS NG REST API.
+
+### Breaking Changes
+
+- The `pyhifiberry` dependency has been removed.
+- The old socket.io API on port `81` is no longer used.
+- The `authtoken` setup field has been removed for new config entries.
+- The integration is now local polling rather than local push.
+- Existing config entries may need their port changed to `80`.
+- Player controls are now source-specific. Buttons such as next/previous are
+  only exposed when the currently active HiFiBerry player reports support for
+  them.
+
+Existing entries that still contain an old `authtoken` value should continue to
+load, but the value is ignored.
+
+### HBOS NG API Details
+
+The integration uses:
+
+```text
+GET  /api/audiocontrol/now-playing
+GET  /api/audiocontrol/players
+POST /api/audiocontrol/player/<player_name>/command/<command>
+POST /api/audiocontrol/players/pause-all
+POST /api/audiocontrol/players/stop-all
+GET  /api/audiocontrol/coverart/...
+```
+
+Some HiFiBerry builds expose the backend on port `1080`, but the public and
+documented web UI route is usually port `80` with the `/api/audiocontrol/`
+prefix. The integration prefers the public route and keeps compatibility probes
+for older path shapes where practical.
+
+## Album Artwork
+
+HBOS NG does not always include artwork URLs in `now-playing`. The web UI performs
+a separate cover-art lookup using the current title, artist, and album. This
+integration mirrors that behavior and cleans common AirPlay metadata suffixes
+such as ` • Video Available` before querying cover-art providers.
+
+## Troubleshooting
+
+If the integration loads but controls are missing, inspect the entity attributes:
+
+```text
+hifiberry_active_player_name
+hifiberry_active_player_capabilities
+hifiberry_last_active_player_name
+hifiberry_cover_art_url
+hifiberry_now_playing
+```
+
+These show the active source, what commands HiFiBerry reports as supported, and
+the raw metadata returned by HBOS NG.
+
+If Home Assistant still appears to run an older version after updating, remove:
+
+```text
+<config directory>/custom_components/hifiberry/__pycache__/
+```
+
+and fully restart Home Assistant.
+
+## Support
+
+This is community-supported and is not an official HiFiBerry or Home Assistant
+integration.
+
+Discussion and support:
+
+- [Home Assistant HiFiBerry discussion thread](https://community.home-assistant.io/t/hifiberry-os-media-player-integration/163567)
+
+Related projects:
+
+- [HiFiBerry OS](https://www.hifiberry.com/hifiberryos/)
+- [HBOS NG backend API docs](https://github.com/hifiberry/hifiberry-os/blob/hbosng/docs/backend-apis.md)

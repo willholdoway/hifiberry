@@ -1,71 +1,102 @@
-"""Hifiberry Platform."""
-import logging
+"""HiFiBerry media player platform."""
+from __future__ import annotations
+
 from datetime import timedelta
+import logging
+from typing import Any
 
 from homeassistant.components.media_player import MediaPlayerEntity
 from homeassistant.components.media_player.const import MediaType
 from homeassistant.components.media_player import MediaPlayerEntityFeature
+from homeassistant.const import STATE_IDLE, STATE_PAUSED, STATE_PLAYING
 
-from homeassistant.const import (
-    STATE_IDLE,
-    STATE_PAUSED,
-    STATE_PLAYING,
-)
-from pyhifiberry.audiocontrol2 import Audiocontrol2Exception, LOGGER
-from pyhifiberry.audiocontrol2sio import Audiocontrol2SIO
-from .const import DATA_HIFIBERRY, DATA_INIT, DOMAIN
-
-from homeassistant.components.media_player import MediaPlayerEntityFeature
-SUPPORT_HIFIBERRY = (
-    MediaPlayerEntityFeature.PAUSE |
-    MediaPlayerEntityFeature.VOLUME_SET |
-    MediaPlayerEntityFeature.VOLUME_MUTE |
-    MediaPlayerEntityFeature.PREVIOUS_TRACK |
-    MediaPlayerEntityFeature.NEXT_TRACK |
-    MediaPlayerEntityFeature.STOP |
-    MediaPlayerEntityFeature.PLAY |
-    MediaPlayerEntityFeature.VOLUME_STEP |
-    MediaPlayerEntityFeature.TURN_OFF
-)
+from .audiocontrol import AudioControlClient, AudioControlError
+from .const import DATA_HIFIBERRY, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+SCAN_INTERVAL = timedelta(seconds=5)
+
+SUPPORT_VOLUME = (
+    MediaPlayerEntityFeature.VOLUME_SET
+    | MediaPlayerEntityFeature.VOLUME_MUTE
+    | MediaPlayerEntityFeature.VOLUME_STEP
+)
+
+CAPABILITY_TO_FEATURE = {
+    "play": MediaPlayerEntityFeature.PLAY,
+    "pause": MediaPlayerEntityFeature.PAUSE,
+    "stop": MediaPlayerEntityFeature.STOP,
+    "previous": MediaPlayerEntityFeature.PREVIOUS_TRACK,
+    "next": MediaPlayerEntityFeature.NEXT_TRACK,
+}
+
+PLAY_PAUSE_FEATURES = (
+    MediaPlayerEntityFeature.PLAY
+    | MediaPlayerEntityFeature.PAUSE
+)
+
+SUPPORT_HIFIBERRY_FALLBACK = (
+    MediaPlayerEntityFeature.PAUSE
+    | MediaPlayerEntityFeature.STOP
+    | MediaPlayerEntityFeature.PLAY
+    | SUPPORT_VOLUME
+)
+
+if hasattr(MediaPlayerEntityFeature, "TURN_ON"):
+    SUPPORT_HIFIBERRY_FALLBACK |= MediaPlayerEntityFeature.TURN_ON
+
+if hasattr(MediaPlayerEntityFeature, "TURN_OFF"):
+    SUPPORT_HIFIBERRY_FALLBACK |= MediaPlayerEntityFeature.TURN_OFF
+
+
+def _first_value(data: dict[str, Any], *keys: str) -> Any:
+    """Return the first non-empty value from a dict."""
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _nested_first_value(data: dict[str, Any], *keys: str) -> Any:
+    """Return the first non-empty value from now-playing or nested song data."""
+    song = data.get("song")
+    if isinstance(song, dict):
+        value = _first_value(song, *keys)
+        if value is not None:
+            return value
+    return _first_value(data, *keys)
+
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the hifiberry media player platform."""
+    """Set up the HiFiBerry media player platform."""
 
     data = hass.data[DOMAIN][config_entry.entry_id]
-    audiocontrol2 = data[DATA_HIFIBERRY]
+    audiocontrol = data[DATA_HIFIBERRY]
     uid = config_entry.entry_id
-    name = f"hifiberry {config_entry.data['host']}"
-    base_url = f"http://{config_entry.data['host']}:{config_entry.data['port']}"
-    entity = HifiberryMediaPlayer(audiocontrol2, uid, name, base_url)
-    async_add_entities([entity])
+    name = f"HiFiBerry {config_entry.data['host']}"
+    entity = HifiberryMediaPlayer(audiocontrol, uid, name)
+    async_add_entities([entity], update_before_add=True)
 
 
 class HifiberryMediaPlayer(MediaPlayerEntity):
-    """Hifiberry Media Player Object."""
+    """HiFiBerry media player object."""
 
-    should_poll = False
+    should_poll = True
 
-    def __init__(self, audiocontrol2: Audiocontrol2SIO, uid, name, base_url):
+    def __init__(self, audiocontrol: AudioControlClient, uid: str, name: str) -> None:
         """Initialize the media player."""
-        self._audiocontrol2 = audiocontrol2
-        self._uid = uid
-        self._name = name
-        self._base_url = base_url
-        self._muted = audiocontrol2.volume.percent == 0
-        self._muted_volume = audiocontrol2.volume.percent
+        self._audiocontrol = audiocontrol
+        self._attr_unique_id = uid
+        self._attr_name = name
+        self._muted = False
+        self._muted_volume = 50
 
     @property
     def available(self) -> bool:
         """Return true if device is responding."""
-        return self._audiocontrol2.connected
-
-    @property
-    def unique_id(self):
-        """Return the unique id for the entity."""
-        return self._uid
+        return self._audiocontrol.connected
 
     @property
     def device_info(self):
@@ -73,18 +104,8 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
         return {
             "identifiers": {(DOMAIN, self.unique_id)},
             "name": self.name,
-            "manufacturer": "Hifiberry",
+            "manufacturer": "HiFiBerry",
         }
-
-    async def async_added_to_hass(self) -> None:
-        """Run when this Entity has been added to HA."""
-        await self._audiocontrol2.volume.get()      ### make sure volume percent is set
-        self._audiocontrol2.metadata.add_callback(self.schedule_update_ha_state)
-        self._audiocontrol2.volume.add_callback(self.schedule_update_ha_state)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Entity being removed from hass."""
-        await self._audiocontrol2.disconnect()
 
     @property
     def media_content_type(self):
@@ -92,65 +113,153 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
         return MediaType.MUSIC
 
     @property
+    def supported_features(self):
+        """Return features supported by the active player."""
+        capabilities = self._audiocontrol.active_player_capabilities
+        if not capabilities:
+            return SUPPORT_HIFIBERRY_FALLBACK
+
+        features = SUPPORT_VOLUME
+        for capability, feature in CAPABILITY_TO_FEATURE.items():
+            if capability in capabilities:
+                features |= feature
+        if "play_pause" in capabilities:
+            features |= PLAY_PAUSE_FEATURES
+        if "play" in capabilities:
+            if hasattr(MediaPlayerEntityFeature, "TURN_ON"):
+                features |= MediaPlayerEntityFeature.TURN_ON
+        if "stop" in capabilities or "pause" in capabilities:
+            if hasattr(MediaPlayerEntityFeature, "TURN_OFF"):
+                features |= MediaPlayerEntityFeature.TURN_OFF
+        return features
+
+    @property
     def state(self):
         """Return the state of the device."""
-        status = self._audiocontrol2.metadata.playerState
-        if status == "paused":
+        status = str(
+            _first_value(
+                self._audiocontrol.now_playing,
+                "state",
+                "playerState",
+                "player_state",
+                "status",
+            )
+            or ""
+        ).lower()
+        if status in ("paused", "pause"):
             return STATE_PAUSED
-        if status == "playing":
+        if status in ("playing", "play"):
             return STATE_PLAYING
         return STATE_IDLE
 
     @property
-    def media_position_updated_at(self):
-        """When was the position of the current playing media valid.
-
-        Returns value from homeassistant.util.dt.utcnow().
-        """
-        return self._audiocontrol2.metadata.positionupdate
-        
-    @property
     def media_title(self):
         """Title of current playing media."""
-        return self._audiocontrol2.metadata.title
+        return _nested_first_value(
+            self._audiocontrol.now_playing,
+            "title",
+            "name",
+            "song_title",
+        )
 
     @property
     def media_artist(self):
-        """Artist of current playing media (Music track only)."""
-        return self._audiocontrol2.metadata.artist
+        """Artist of current playing media."""
+        return _nested_first_value(
+            self._audiocontrol.now_playing,
+            "artist",
+            "song_artist",
+        )
 
     @property
     def media_album_name(self):
-        """Artist of current playing media (Music track only)."""
-        return self._audiocontrol2.metadata.albumTitle
+        """Album of current playing media."""
+        return _nested_first_value(
+            self._audiocontrol.now_playing,
+            "album",
+            "albumTitle",
+            "album_title",
+        )
 
     @property
     def media_album_artist(self):
-        """Album artist of current playing media, music track only."""
-        return self._audiocontrol2.metadata.albumArtist
+        """Album artist of current playing media."""
+        return _nested_first_value(
+            self._audiocontrol.now_playing,
+            "albumArtist",
+            "album_artist",
+        )
 
     @property
     def media_track(self):
-        """Track number of current playing media, music track only."""
-        return self._audiocontrol2.metadata.tracknumber
+        """Track number of current playing media."""
+        return _nested_first_value(
+            self._audiocontrol.now_playing,
+            "track",
+            "tracknumber",
+            "track_number",
+        )
 
     @property
     def media_image_url(self):
-        """Image url of current playing media."""
-        art_url = self._audiocontrol2.metadata.artUrl
-        external_art_url = self._audiocontrol2.metadata.externalArtUrl
-        if art_url is not None:
-            if art_url.startswith("static/"):
-                return external_art_url
+        """Image URL of current playing media."""
+        art_url = _nested_first_value(
+            self._audiocontrol.now_playing,
+            "artUrl",
+            "art_url",
+            "artwork",
+            "image",
+            "image_url",
+            "coverart",
+            "coverart_url",
+            "album_art",
+            "album_art_url",
+            "cover",
+            "cover_url",
+        )
+        if art_url is None:
+            art_url = self._audiocontrol.cover_art_url
+        if isinstance(art_url, str) and art_url.startswith("/"):
+            base_url = (
+                self._audiocontrol.public_base_url
+                if art_url.startswith("/api/")
+                else self._audiocontrol.base_url
+            )
+            return f"{base_url}{art_url}"
+        if isinstance(art_url, str) and not art_url.startswith(("http://", "https://")):
             if art_url.startswith("artwork/"):
-                return f"{self._base_url}/{art_url}"
-            return art_url
-        return external_art_url
+                return f"{self._audiocontrol.base_url}/api/{art_url}"
+            return f"{self._audiocontrol.base_url}/{art_url}"
+        return art_url
+
+    @property
+    def extra_state_attributes(self):
+        """Expose raw AudioControl data for troubleshooting metadata/artwork."""
+        return {
+            "hifiberry_now_playing": self._audiocontrol.now_playing,
+            "hifiberry_active_player_name": self._audiocontrol.active_player_name,
+            "hifiberry_last_active_player_name": (
+                self._audiocontrol.last_active_player_name
+            ),
+            "hifiberry_active_player_capabilities": sorted(
+                self._audiocontrol.active_player_capabilities
+            ),
+            "hifiberry_cover_art_url": self._audiocontrol.cover_art_url,
+            "hifiberry_media_image_url": self.media_image_url,
+        }
 
     @property
     def volume_level(self):
         """Volume level of the media player (0..1)."""
-        return int(self._audiocontrol2.volume.percent) / 100
+        percent = _first_value(
+            self._audiocontrol.volume,
+            "percentage",
+            "percent",
+            "volume",
+        )
+        if percent is None:
+            return None
+        return float(percent) / 100
 
     @property
     def is_volume_muted(self):
@@ -158,60 +267,88 @@ class HifiberryMediaPlayer(MediaPlayerEntity):
         return self._muted
 
     @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
-
-    @property
     def source(self):
         """Name of the current input source."""
-        return self._audiocontrol2.metadata.playerName
+        player = self._audiocontrol.now_playing.get("player")
+        if isinstance(player, dict):
+            return _first_value(player, "name", "id")
+        return _first_value(
+            self._audiocontrol.now_playing,
+            "player",
+            "playerName",
+            "player_name",
+            "source",
+        )
 
-    @property
-    def supported_features(self):
-        """Flag of media commands that are supported."""
-        return SUPPORT_HIFIBERRY
+    async def async_update(self):
+        """Refresh state from AudioControl."""
+        try:
+            await self._audiocontrol.async_update()
+        except AudioControlError:
+            _LOGGER.debug("Unable to update HiFiBerry state", exc_info=True)
 
     async def async_media_next_track(self):
         """Send media_next command to media player."""
-        await self._audiocontrol2.player.next()
+        await self._audiocontrol.async_command("next")
 
     async def async_media_previous_track(self):
         """Send media_previous command to media player."""
-        await self._audiocontrol2.player.previous()
+        await self._audiocontrol.async_command("previous")
 
     async def async_media_play(self):
         """Send media_play command to media player."""
-        await self._audiocontrol2.player.play()
+        await self._audiocontrol.async_command("play")
 
     async def async_media_pause(self):
         """Send media_pause command to media player."""
-        await self._audiocontrol2.player.pause()
+        await self._audiocontrol.async_command("pause")
+
+    async def async_media_play_pause(self):
+        """Toggle play/pause state."""
+        try:
+            await self._audiocontrol.async_update()
+        except AudioControlError:
+            _LOGGER.debug("Unable to refresh HiFiBerry state before toggle", exc_info=True)
+        if self.state == STATE_PLAYING:
+            await self._audiocontrol.async_command("pause")
+        else:
+            await self._audiocontrol.async_command("play")
+
+    async def async_turn_on(self):
+        """Turn the media player on by starting playback."""
+        await self._audiocontrol.async_command("play")
+
+    async def async_turn_off(self):
+        """Turn the media player off by stopping playback."""
+        await self._audiocontrol.async_command("stop")
+
+    async def async_toggle(self):
+        """Toggle playback for Home Assistant's media_player.toggle action."""
+        await self.async_media_play_pause()
+
+    async def async_media_stop(self):
+        """Send media_stop command to media player."""
+        await self._audiocontrol.async_command("stop")
 
     async def async_volume_up(self):
-        """Service to send the hifiberry the command for volume up."""
-        await self._audiocontrol2.volume.set(min(100, self._audiocontrol2.volume.percent + 5))
+        """Service to send the HiFiBerry the command for volume up."""
+        await self._audiocontrol.async_volume_up()
 
     async def async_volume_down(self):
-        """Service to send the hifiberry the command for volume down."""
-        await self._audiocontrol2.volume.set(max(0, self._audiocontrol2.volume.percent - 5))
+        """Service to send the HiFiBerry the command for volume down."""
+        await self._audiocontrol.async_volume_down()
 
     async def async_set_volume_level(self, volume):
         """Send volume_set command to media player."""
-        if volume < 0:
-            volume = 0
-        elif volume > 1:
-            volume = 1
-        await self._audiocontrol2.volume.set(int(volume * 100))
-        self._volume = volume * 100
+        await self._audiocontrol.async_set_volume(volume * 100)
 
     async def async_mute_volume(self, mute):
-        """Mute. Emulated with set_volume_level."""
+        """Mute, emulated by setting volume to 0."""
         if mute:
-            self._muted_volume = self.volume_level * 100
-            await self._audiocontrol2.volume.set(0)
-        await self._audiocontrol2.volume.set(int(self._muted_volume))
+            current_volume = self.volume_level
+            if current_volume is not None:
+                self._muted_volume = current_volume * 100
+            await self._audiocontrol.async_set_volume(0)
+        else:
+            await self._audiocontrol.async_set_volume(self._muted_volume)
         self._muted = mute
-
-    async def async_turn_off(self):
-        return await self._audiocontrol2.poweroff()
