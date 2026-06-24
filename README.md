@@ -76,8 +76,9 @@ This release moves the integration from the legacy HiFiBerry OS
   only exposed when the currently active HiFiBerry player reports support for
   them.
 
-Existing entries that still contain an old `authtoken` value should continue to
-load, but the value is ignored.
+Existing entries are migrated automatically where possible. Legacy entries have
+their old `authtoken` value removed, and entries using the old socket.io port
+`81` are moved to port `80`.
 
 ### HBOS NG API Details
 
@@ -140,3 +141,13 @@ Related projects:
 
 - [HiFiBerry OS](https://www.hifiberry.com/hifiberryos/)
 - [HBOS NG backend API docs](https://github.com/hifiberry/hifiberry-os/blob/hbosng/docs/backend-apis.md)
+
+## Home Assistant Core
+
+This repository is packaged as a HACS custom integration. Before submitting the
+integration to Home Assistant Core, the AudioControl API client should be
+extracted into a tested PyPI package and the integration should be ported into
+`homeassistant/components/hifiberry/`.
+
+See [CORE_SUBMISSION.md](CORE_SUBMISSION.md) for the current Core-readiness
+checklist.

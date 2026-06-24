@@ -16,6 +16,20 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["media_player"]
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate legacy HiFiBerry OS config entries to HBOS NG settings."""
+    if entry.version >= 2:
+        return True
+
+    data = dict(entry.data)
+    data.pop("authtoken", None)
+    if data.get("port") in (None, 81):
+        data["port"] = 80
+
+    hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up hifiberry from a config entry."""
     host = entry.data["host"]
