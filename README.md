@@ -1,5 +1,13 @@
 ## HiFiBerry for Home Assistant
 
+### Legacy HiFiBerry OS compatibility branch
+
+This branch supports legacy HiFiBerry OS releases that use the older
+`audiocontrol2` socket.io API on port `81`.
+
+For current HiFiBerry OS / HBOS NG releases, use the main version of this
+integration instead.
+
 ![beta_badge](https://img.shields.io/badge/maturity-Beta-yellow.png)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs)
 [![License: CC0-1.0](https://img.shields.io/badge/License-CC0%201.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
