@@ -53,6 +53,10 @@ class AudioControlClient:
                         response.raise_for_status()
                         if response.content_type == "application/json":
                             return await response.json()
+                        # HiFiBerryOS NG answers an unknown /api path with the web UI's
+                        # index.html and 200; that is not this endpoint, so try the next one.
+                        if response.content_type == "text/html":
+                            raise ClientError(f"{url} answered with HTML, not the API")
                         return {}
                 except (TimeoutError, ClientError, ClientResponseError) as err:
                     last_error = err
@@ -121,6 +125,10 @@ class AudioControlClient:
                 ),
             )
         except AudioControlError:
+            self.volume = {}
+        # The PipeWire fallback lists every sink rather than one volume; without a
+        # single volume object there is no volume to show.
+        if not isinstance(self.volume, dict):
             self.volume = {}
         await self.async_update_cover_art()
         active_player_name = self._active_player_name()
